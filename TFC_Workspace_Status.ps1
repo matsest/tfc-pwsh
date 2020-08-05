@@ -52,12 +52,12 @@ SOFTWARE.
 #>
 [cmdletBinding()]
 Param(
-  [Parameter(Mandatory = $true)]
-  [string] $Org,
-  [Parameter(Mandatory = $true)]
-  [string] $Server,
-  [Parameter(Mandatory = $true)]
-  [string] $TF_TOKEN
+    [Parameter(Mandatory = $true)]
+    [string] $Org,
+    [Parameter(Mandatory = $true)]
+    [string] $Server,
+    [Parameter(Mandatory = $true)]
+    [string] $TF_TOKEN
 )
 
 $pag = 1
@@ -67,46 +67,46 @@ $instances = @()
 
 
 $headers = @{
-  Authorization = "Bearer $TF_TOKEN"
+    Authorization = "Bearer $TF_TOKEN"
 }
 
 try {
-  Write-Verbose -Message "connecting and getting workspace info from TFC/TFE using token"
-  #Getting the numnber of pages used in TFC/TFE
-  $page = (Invoke-RestMethod  -Uri "https://$Server/api/v2/organizations/$Org/workspaces?page%5Bnumber=$pag%5D" -Method Get -ContentType "application/vnd.api+json" -Headers $headers -ErrorVariable $ErrorCredential).meta.pagination.'total-pages' 
-  While ($pag -le $page) {
-    #getting all the workspace information on the organization
-    $data = (Invoke-RestMethod  -Uri "https://$Server/api/v2/organizations/$Org/workspaces?page%5Bnumber=$pag%5D" -Method Get -ContentType "application/vnd.api+json" -Headers $headers).data
+    Write-Verbose -Message "connecting and getting workspace info from TFC/TFE using token"
+    #Getting the numnber of pages used in TFC/TFE
+    $page = (Invoke-RestMethod  -Uri "https://$Server/api/v2/organizations/$Org/workspaces?page%5Bnumber=$pag%5D" -Method Get -ContentType "application/vnd.api+json" -Headers $headers -ErrorVariable $ErrorCredential).meta.pagination.'total-pages' 
+    While ($pag -le $page) {
+        #getting all the workspace information on the organization
+        $data = (Invoke-RestMethod  -Uri "https://$Server/api/v2/organizations/$Org/workspaces?page%5Bnumber=$pag%5D" -Method Get -ContentType "application/vnd.api+json" -Headers $headers).data
 
-    foreach ($workspace in $data) {
-      $workspaceID = $workspace.id
-      Write-Progress -Activity "getting Terraform Workspaces" -Status "Working on worksapce $workspace"  -PercentComplete ((($data.IndexOf($workspace)) / $data.Count) * 100)
-      Write-Progress -Activity "Terraform Workspaces" -Status "Done" -PercentComplete 100 -Completed
-      #This will get the state information of the workspaces
-      $status = (Invoke-RestMethod  -Uri "https://$Server/api/v2/workspaces/$workspaceID/runs" -Method Get -ContentType "application/vnd.api+json" -Headers $headers).data.attributes.status[0]
-      $wrk = new-object PSObject
-      $wrk | add-member -MemberType NoteProperty -Name "WorkspaceID" -Value $workspace.id
-      $wrk | add-member -MemberType NoteProperty -Name "WorkspaceName" -Value $workspace.attributes.name
-      $wrk | add-member -MemberType NoteProperty -Name "Version" -Value $workspace.attributes.'terraform-version'
-      $wrk | add-member -MemberType NoteProperty -Name "Status" -Value $status
+        foreach ($workspace in $data) {
+            $workspaceID = $workspace.id
+            Write-Progress -Activity "getting Terraform Workspaces" -Status "Working on worksapce $workspace"  -PercentComplete ((($data.IndexOf($workspace)) / $data.Count) * 100)
+            Write-Progress -Activity "Terraform Workspaces" -Status "Done" -PercentComplete 100 -Completed
+            #This will get the state information of the workspaces
+            $status = (Invoke-RestMethod  -Uri "https://$Server/api/v2/workspaces/$workspaceID/runs" -Method Get -ContentType "application/vnd.api+json" -Headers $headers).data.attributes.status[0]
+            $wrk = new-object PSObject
+            $wrk | add-member -MemberType NoteProperty -Name "WorkspaceID" -Value $workspace.id
+            $wrk | add-member -MemberType NoteProperty -Name "WorkspaceName" -Value $workspace.attributes.name
+            $wrk | add-member -MemberType NoteProperty -Name "Version" -Value $workspace.attributes.'terraform-version'
+            $wrk | add-member -MemberType NoteProperty -Name "Status" -Value $status
 
-      $workspaces += $wrk
+            $workspaces += $wrk
+        }
+        $pag++
     }
-    $pag++
-  }
 }
 catch {
-  IF ($ErrorCredential) {
-    Write-Warning -Message  "Review - Credentials to connect to TFC/TFE"
-  }
-  Write-Warning -Message $error[0].exception.message
-  break
+    IF ($ErrorCredential) {
+        Write-Warning -Message  "Review - Credentials to connect to TFC/TFE"
+    }
+    Write-Warning -Message $error[0].exception.message
+    break
 }
  
 $instances = ($workspaces | Out-GridView -OutputMode Multiple -Title ‘Please select the workspace/worspaces to run.’).WorkspaceID 
 $message = Read-Host "Message for this Workpsace run"
 $instances | ForEach-Object -parallel {
-  $body = @"
+    $body = @"
     {
         "data": {
             "attributes": {
@@ -127,14 +127,14 @@ $instances | ForEach-Object -parallel {
     }
 "@
  
-  #This will attempt to trigger the run on all selected workspaces
-  try {
-    Invoke-RestMethod  -Uri "https://$using:server/api/v2/runs" -Method POST -ContentType "application/vnd.api+json" -Headers $using:headers -Body $body -ErrorVariable $ErrorCredential | Out-Null
-  }
-  catch {
-    IF ($ErrorCredential) {
-      Write-Warning -Message  "Review - Credentials to connect to TFC/TFE"
+    #This will attempt to trigger the run on all selected workspaces
+    try {
+        Invoke-RestMethod  -Uri "https://$using:server/api/v2/runs" -Method POST -ContentType "application/vnd.api+json" -Headers $using:headers -Body $body -ErrorVariable $ErrorCredential | Out-Null
     }
-    Write-Warning -Message $error[0].exception.message
-  }
+    catch {
+        IF ($ErrorCredential) {
+            Write-Warning -Message  "Review - Credentials to connect to TFC/TFE"
+        }
+        Write-Warning -Message $error[0].exception.message
+    }
 }
